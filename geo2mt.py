@@ -52,11 +52,16 @@ class transnode:
 				tmpk = self.get_best(tmpdic)
 				self.kbestt.append(tmpk)
 				del(tmpdic[tmpk])
-	def get_threshold(self, score):
+	def get_threshold(self, score, islog):
 		import math
-		for key in self.t:
-			if math.pow(math.e,self.t[key]) >= score:
-				self.thresoldtrans.append(key)
+		if islog == 'islog':
+			for key in self.t:
+				if math.pow(math.e,self.t[key]) >= score:
+					self.thresoldtrans.append(key)
+		elif islog == 'notlog':
+			for key in self.t:
+				if self.t[key] >= score:
+					self.thresoldtrans.append(key)
 	def set_indexs(self):
 		assert self.beg < self.end
 		s = ''
@@ -142,7 +147,7 @@ def get_sp_tp(tree, beg, end, transdic):
 		return False
 	return (sp,tp)
 
-def make_sen_input(tree, transdic, max_phrase_size, kbest):
+def make_sen_input(tree, transdic, max_phrase_size, kbest, islog):
 	transnodes = []
 	for i in range(len(tree)):
 		k = len(tree)
@@ -165,7 +170,7 @@ def make_sen_input(tree, transdic, max_phrase_size, kbest):
 			if kbest > 1:#is a number of kbest trans
 				tnode.find_kbestt(kbest)
 			elif kbest < 1:#is a thresold of trans score
-				tnode.get_threshold(kbest)
+				tnode.get_threshold(kbest, islog)
 				if len(tnode.thresoldtrans) == 0:
 					continue
 			tnode.set_indexs()
@@ -181,14 +186,14 @@ def get_logs(chtree, entree):
 		ens += node.word
 		ens += ' '
 	return (chs,ens)
-def make_allsen(trees, entrees, transdic, max_phrase_size, kbest):
+def make_allsen(trees, entrees, transdic, max_phrase_size, kbest, islog):
 	allsens = []
 	logs = []
 	treeindex = 0
 	for tree in trees:
 		allsens.append([])
 		logs.append([])
-		transnodes = make_sen_input(tree, transdic, max_phrase_size, kbest)
+		transnodes = make_sen_input(tree, transdic, max_phrase_size, kbest, islog)
 		for tnode in transnodes:
 			ss = ''
 			if kbest < 1: #it's a thresold
@@ -256,8 +261,8 @@ if __name__=='__main__':
 	entrees = read_dep_tree(sys.argv[2]) #en tree
 	transdic = read_phrase(sys.argv[3]) #phrase table
 	transdic = read_loc_dic(sys.argv[4], transdic) #loc dic
-	(allsens, logs) = make_allsen(chtrees, entrees, transdic, int(sys.argv[5]), float(sys.argv[6])) # max phrase size; kbest
-	printout(allsens, chtrees, sys.argv[7]) #mt file path
-	printout(logs, chtrees, sys.argv[7]+'.log') #mt log file path
+	(allsens, logs) = make_allsen(chtrees, entrees, transdic, int(sys.argv[5]), float(sys.argv[6]), sys.argv[7]) # max phrase size; kbest; is a log socre
+	printout(allsens, chtrees, sys.argv[8]) #mt file path
+	printout(logs, chtrees, sys.argv[8]+'.log') #mt log file path
 
 
