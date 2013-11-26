@@ -11,6 +11,9 @@ class transnode:
 	def __init__(self):
 		self.s = ''
 		self.t = {} #{'t':score}
+		self.combine_t= {}
+		self.t_deptree= {}
+		self.combine_t_deptree ={}
 		self.n = 0 # number of span that self.s contain from source sentence
 		self.ntrans = 0 #number of trans items in self.t
 		self.bestt = ''
@@ -20,6 +23,21 @@ class transnode:
 		self.end = None
 		self.indexs = ''
 		self.thresoldtrans = []
+
+	def combine_target_phrase_with_word_and_tag(self, isdep):
+		if isdep == 'notdep':
+			for key in self.t:
+				self.combine_t[key] = self.t[key]
+		elif isdep == 'isdep':
+			for depss in self.t:
+				root = blknode()
+				root.load(depss)
+				self.t_deptree.append(root)
+			for root in self.t_deptree:
+				pass
+		else:
+			print 'error parametre in combine_target_phrase_with_word_and_tag'
+			exit(0)
 	def find_bestt(self):
 		self.bestt = ''
 		tmpt = ''
@@ -52,16 +70,18 @@ class transnode:
 				tmpk = self.get_best(tmpdic)
 				self.kbestt.append(tmpk)
 				del(tmpdic[tmpk])
-	def get_threshold(self, score, islog):
+	def get_threshold(self, thre_score, islog):
 		import math
 		if islog == 'islog':
 			for key in self.t:
-				if math.pow(math.e,self.t[key]) >= score:
-					self.thresoldtrans.append(key)
-		elif islog == 'notlog':
-			for key in self.t:
-				if self.t[key] >= score:
-					self.thresoldtrans.append(key)
+				self.t[key] = math.pow(math.e,self.t[key])
+		bestscore = 0
+		for key in self.t:
+			if self.t[key] > bestscore:
+				bestscore = self.t[key]
+		for key in self.t:
+			if self.t[key] >= bestscore * thre_score:
+				self.thresoldtrans.append(key)
 	def set_indexs(self):
 		assert self.beg < self.end
 		s = ''
@@ -185,12 +205,15 @@ def make_sen_input(tree, transdic, max_phrase_size, kbest, islog, transdirec):
 			tnode.ntrans = len(tnode.t)
 			tnode.n = tnode.end - tnode.beg
 			tnode.find_bestt()
-			if kbest > 1:#is a number of kbest trans
+			if kbest == 100:#is a number of kbest trans
 				tnode.find_kbestt(kbest)
 			elif kbest < 1:#is a thresold of trans score
 				tnode.get_threshold(kbest, islog)
 				if len(tnode.thresoldtrans) == 0:
 					continue
+			else:
+				print 'wrong kbest parametre'
+				exit(0)
 			tnode.set_indexs()
 			transnodes.append(tnode)
 	return transnodes
@@ -204,7 +227,7 @@ def get_logs(chtree, entree):
 		ens += node.word
 		ens += ' '
 	return (chs,ens)
-def make_allsen(trees, entrees, transdic, max_phrase_size, kbest, islog, transdirec):
+def make_allsen(trees, entrees, transdic, max_phrase_size, kbest, islog, transdirec, t_dep = 'isdep'):
 	allsens = []
 	logs = []
 	treeindex = 0
@@ -214,33 +237,35 @@ def make_allsen(trees, entrees, transdic, max_phrase_size, kbest, islog, transdi
 		transnodes = make_sen_input(tree, transdic, max_phrase_size, kbest, islog, transdirec)
 		for tnode in transnodes:
 			ss = ''
-			if kbest < 1: #it's a thresold
+			if kbest < 1: #it's a thresold score
 				c = 0
-				for tran in tnode.thresoldtrans:
-					if tran.find(' ') != -1:
-						tran = tran.replace(' ','_')
-						tran = '__' + tran
-						tran += '__'
-					ss += tran
-					if c != len(tnode.thresoldtrans)-1:
-						ss += ' '
-					c += 1
-			elif kbest == 1:
-				if tnode.bestt.find(' ') != -1:
-					ss = '__' + tnode.bestt.replace(' ','_') + '__'
-				else:
-					ss = tnode.bestt
+				for blksen in tnode.thresoldtrans:
+					if t_dep == 'isdep':
+						root = blknode()
+						root.load(blksen)
+						ss += root.sens
+						if c!= len(tnode.thresoldtrans)-1:
+							ss += ' '
+						c += 1
+					else:
+						print 'wrong isblk parametre'
+						exit(0)
+			elif kbest == 100:
+				c = 0
+				for blksen in tnode.kbestt:
+					if t_dep == 'isdep':
+						root = blknode()
+						root.load(blksen)
+						ss += root.sens
+						if c!= len(tnode.kbestt)-1:
+							ss += ' '
+						c += 1
+					else:
+						print 'wrong isblk parametre'
+						exit(0)
 			else:
-				c = 0
-				for tran in tnode.kbestt:
-					if tran.find(' ') != -1:
-						tran = tran.replace(' ','_')
-						tran = '__' + tran
-						tran += '__'
-					ss += tran
-					if c != len(tnode.kbestt)-1:
-						ss += ' '
-					c += 1
+				print 'wrong kbest parametre'
+				exit(0)
 			allsens[treeindex].append(tnode.indexs + '\t' + tnode.tag + '\t' + ss)
 			logs[treeindex].append(tnode.indexs + '\t' + tnode.tag + '\t' + ss)
 		logs[treeindex].append(get_logs(tree, entrees[treeindex])[0])
@@ -278,8 +303,8 @@ if __name__=='__main__':
 	chtrees = read_dep_tree(sys.argv[1]) #src tree
 	entrees = read_dep_tree(sys.argv[2]) #tgt tree
 	transdic = read_phrase(sys.argv[3], sys.argv[8]) #phrase table; transdirec
-	transdic = read_loc_dic(sys.argv[4], transdic) #loc dic
-	(allsens, logs) = make_allsen(chtrees, entrees, transdic, int(sys.argv[5]), float(sys.argv[6]), sys.argv[7], sys.argv[8]) # max phrase size; kbest; is a log socre; trans direction
-	printout(allsens, chtrees, sys.argv[9]) #mt file path
-	printout(logs, chtrees, sys.argv[9]+'.log') #mt log file path
-	#print_reference(sys.argv[1],entrees)
+	#transdic = read_loc_dic(sys.argv[4], transdic) #loc dic
+	(allsens, logs) = make_allsen(chtrees, entrees, transdic, int(sys.argv[5]), float(sys.argv[6]), sys.argv[7], sys.argv[8], sys.argv[9]) # max phrase size; kbest; is a log socre; trans direction; target dep?
+	printout(allsens, chtrees, sys.argv[10]) #mt file path
+	printout(logs, chtrees, sys.argv[10]+'.log') #mt log file path
+	print_reference(sys.argv[11],entrees)
